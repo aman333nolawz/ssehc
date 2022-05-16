@@ -128,9 +128,9 @@ class Board(chess.Board):
         engine = None
         try:
             engine = chess.engine.SimpleEngine.popen_uci(r"./engines/stockfish_15_x64")
-            result = engine.play(self, chess.engine.Limit(time=0.5))
+            result = engine.play(self, chess.engine.Limit(time=5))
             self.push(result.move)
-            self.pov_score = engine.analyse(self, chess.engine.Limit(time=0.5)).get("score")
+            # self.pov_score = engine.analyse(self, chess.engine.Limit(time=5)).get("score")
         finally:
             if engine:
                 engine.quit()

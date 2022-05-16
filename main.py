@@ -3,6 +3,7 @@ from board import Board
 import chess.engine
 
 pygame.init()
+pygame.font.init()
 
 W, H = 600, 600
 SQ_SIZE = W // 8
@@ -12,10 +13,12 @@ screen = pygame.Surface((W, H))
 
 pygame.display.set_caption("Chess")
 
+
+font = pygame.font.SysFont("Fira Code Medium", 30)
 board = Board(screen, W, H, SQ_SIZE)
 
 while True:
-    screen.fill("#282828")
+    win.fill("#282A36")
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -31,9 +34,13 @@ while True:
     if board.turn == 0:
         board.computer_move()
 
-    if board.pov_score:
-        print("WHITE:", board.pov_score.white())
-        print("BLACK:", board.pov_score.black())
+    # if board.pov_score:
+    # white_score = font.render(str(board.pov_score.white()), True, "#F8F8F2")
+    # black_score = rm -rf __font.render(str(board.pov_score.black()), True, "#F8F8F2")
+    # win.blit(black_score, (W + 20, 30))
+    # win.blit(white_score, (W + 20, H - 30))
+    # print("WHITE:", board.pov_score.white())
+    # print("BLACK:", board.pov_score.black())
 
     if board.selected_sq:
         board.draw_legal_moves(board.legal_moves_for_piece(board.selected_sq))
