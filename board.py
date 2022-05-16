@@ -1,4 +1,5 @@
 import chess
+import chess.engine
 import pygame
 from easygui import buttonbox
 
@@ -11,8 +12,10 @@ def draw_circle_alpha(surface, color, center, radius):
 
 
 class Board(chess.Board):
-    def __init__(self, win, W, H, SQ_SIZE, *args, **kwargs):
+    def __init__(self, win=None, W=None, H=None, SQ_SIZE=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if win == None:
+            return
         self.win = win
         self.W = W
         self.H = H
@@ -27,6 +30,7 @@ class Board(chess.Board):
             for piece in self.pieces
         ]
         self.selected_sq = None
+        self.pov_score = None
 
     def draw_board(self):
         for y in range(8):
@@ -119,6 +123,17 @@ class Board(chess.Board):
         if self.is_legal(move):
             self.push(move)
         self.selected_sq = None
+
+    def computer_move(self):
+        engine = None
+        try:
+            engine = chess.engine.SimpleEngine.popen_uci(r"./engines/stockfish_15_x64")
+            result = engine.play(self, chess.engine.Limit(time=0.5))
+            self.push(result.move)
+            self.pov_score = engine.analyse(self, chess.engine.Limit(time=0.5)).get("score")
+        finally:
+            if engine:
+                engine.quit()
 
     def __str__(self):
         return super().__str__()[::-1]

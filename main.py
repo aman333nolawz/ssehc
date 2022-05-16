@@ -1,5 +1,6 @@
 import pygame
 from board import Board
+import chess.engine
 
 pygame.init()
 
@@ -19,10 +20,18 @@ while True:
             exit()
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            board.select_square(pygame.mouse.get_pos())
+            if board.turn == 1:
+                board.select_square(pygame.mouse.get_pos())
 
     board.draw_board()
     board.draw_pieces()
+
+    if board.turn == 0:
+        board.computer_move()
+
+    if board.pov_score:
+        print("WHITE:", board.pov_score.white())
+        print("BLACK:", board.pov_score.black())
 
     if board.selected_sq:
         board.draw_legal_moves(board.legal_moves_for_piece(board.selected_sq))
