@@ -7,7 +7,9 @@ pygame.init()
 W, H = 600, 600
 SQ_SIZE = W // 8
 
-screen = pygame.display.set_mode((W, H))
+win = pygame.display.set_mode((W + 100, H))
+screen = pygame.Surface((W, H))
+
 pygame.display.set_caption("Chess")
 
 board = Board(screen, W, H, SQ_SIZE)
@@ -36,4 +38,5 @@ while True:
     if board.selected_sq:
         board.draw_legal_moves(board.legal_moves_for_piece(board.selected_sq))
 
+    win.blit(screen, (0, 0))
     pygame.display.flip()
