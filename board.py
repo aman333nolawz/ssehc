@@ -1,7 +1,11 @@
 import chess
 import chess.engine
 import pygame
+from pygame import mixer
 from easygui import buttonbox
+
+
+pygame.init()
 
 
 def draw_circle_alpha(surface, color, center, radius):
@@ -18,6 +22,10 @@ def draw_rect_alpha(surface, color, rect):
 
 
 class Board(chess.Board):
+    move_sound = mixer.Sound("sounds/Move.ogg")
+    capture_sound = mixer.Sound("sounds/Capture.ogg")
+    check_sound = mixer.Sound("sounds/Check.ogg")
+
     def __init__(self, win=None, W=None, H=None, SQ_SIZE=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if win == None:
@@ -39,7 +47,6 @@ class Board(chess.Board):
         self.pov_score = None
         self.computer_played = False
 
-
     def draw_board(self):
         for y in range(8):
             for x in range(8):
@@ -51,7 +58,10 @@ class Board(chess.Board):
 
     def draw_pieces(self):
         self.board = str(self).replace(" ", "").split("\n")[::-1]
+        # print(self.board)
+        # exit()
         for y, row in enumerate(self.board):
+            row = row[::-1]
             for x, cell in enumerate(row):
                 if cell == ".":
                     continue
@@ -98,7 +108,8 @@ class Board(chess.Board):
         )
 
     def draw_check(self):
-        king_square = list(super().pieces(chess.KING, self.turn))[0]
+        # king_square = list(super().pieces(chess.KING, self.turn))[0]
+        king_square = self.king(self.turn)
         x, y = chess.square_file(king_square), chess.square_rank(king_square)
         x, y = self.convert_xy(x, y)
         draw_rect_alpha(
@@ -108,7 +119,7 @@ class Board(chess.Board):
         )
 
     def convert_xy(self, x, y):
-        return 7 - x, 7 - y
+        return x, 7 - y
 
     def select_square(self, pos):
         if self.selected_sq:
@@ -142,7 +153,21 @@ class Board(chess.Board):
         if not self.move_stack:
             return
         self.pop()
+
+        if not self.move_stack:
+            return
         self.pop()
+
+    def push(self, move):
+        sound = self.move_sound
+        if self.is_capture(move):
+            sound = self.capture_sound
+
+        super().push(move)
+        if self.is_check():
+            print("check")
+            sound = self.check_sound
+        sound.play()
 
     def human_move(self, end_pos):
         if not self.selected_sq:
@@ -170,20 +195,23 @@ class Board(chess.Board):
                     move.promotion = self.convert_to_pieces(promotion_piece).piece_type
         if self.is_legal(move):
             self.push(move)
+            # self.move_sound.play()
         self.selected_sq = None
 
     def computer_move(self, engine):
         self.computer_played = True
         result = engine.play(self, chess.engine.Limit(time=5))
         self.push(result.move)
+        # self.move_sound.play()
         self.computer_played = False
         # self.pov_score = engine.analyse(self, chess.engine.Limit(time=5)).get("score")
 
     def __str__(self):
         builder = []
 
+        mirror = self
         for square in chess.SQUARES_180:
-            piece = self.piece_at(square)
+            piece = mirror.piece_at(square)
 
             if piece:
                 builder.append(piece.symbol())
