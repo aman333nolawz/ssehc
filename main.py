@@ -34,6 +34,8 @@ try:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_z:
                     board.undo()
+                elif event.key == pygame.K_r:
+                    board = Board(screen, W, H, SQ_SIZE)
 
         board.draw_board()
         board.draw_last_move()

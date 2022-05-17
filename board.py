@@ -25,6 +25,7 @@ class Board(chess.Board):
     move_sound = mixer.Sound("sounds/Move.ogg")
     capture_sound = mixer.Sound("sounds/Capture.ogg")
     check_sound = mixer.Sound("sounds/Check.ogg")
+    start_sound = mixer.Sound("sounds/Start.ogg")
 
     def __init__(self, win=None, W=None, H=None, SQ_SIZE=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -46,6 +47,7 @@ class Board(chess.Board):
         self.selected_sq = None
         self.pov_score = None
         self.computer_played = False
+        self.start_sound.play()
 
     def draw_board(self):
         for y in range(8):
