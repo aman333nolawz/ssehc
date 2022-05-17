@@ -37,6 +37,8 @@ class Board(chess.Board):
         ]
         self.selected_sq = None
         self.pov_score = None
+        self.computer_played = False
+
 
     def draw_board(self):
         for y in range(8):
@@ -170,16 +172,12 @@ class Board(chess.Board):
             self.push(move)
         self.selected_sq = None
 
-    def computer_move(self):
-        engine = None
-        try:
-            engine = chess.engine.SimpleEngine.popen_uci(r"./engines/stockfish_15_x64")
-            result = engine.play(self, chess.engine.Limit(time=5))
-            self.push(result.move)
-            # self.pov_score = engine.analyse(self, chess.engine.Limit(time=5)).get("score")
-        finally:
-            if engine:
-                engine.quit()
+    def computer_move(self, engine):
+        self.computer_played = True
+        result = engine.play(self, chess.engine.Limit(time=5))
+        self.push(result.move)
+        self.computer_played = False
+        # self.pov_score = engine.analyse(self, chess.engine.Limit(time=5)).get("score")
 
     def __str__(self):
         builder = []
