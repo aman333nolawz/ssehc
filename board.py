@@ -11,6 +11,12 @@ def draw_circle_alpha(surface, color, center, radius):
     surface.blit(shape_surf, target_rect)
 
 
+def draw_rect_alpha(surface, color, rect):
+    shape_surf = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
+    pygame.draw.rect(shape_surf, color, shape_surf.get_rect())
+    surface.blit(shape_surf, rect)
+
+
 class Board(chess.Board):
     def __init__(self, win=None, W=None, H=None, SQ_SIZE=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -55,7 +61,7 @@ class Board(chess.Board):
     def draw_legal_moves(self, moves):
         for move in moves:
             x, y = chess.square_file(move.to_square), chess.square_rank(move.to_square)
-            x, y = 7 - x, 7 - y
+            x, y = self.convert_xy(x, y)
             draw_circle_alpha(
                 self.win,
                 (0, 0, 0, 127),
@@ -66,12 +72,47 @@ class Board(chess.Board):
                 self.SQ_SIZE // 4,
             )
 
+    def draw_last_move(self):
+        if not self.move_stack:
+            return
+        last_move = self.move_stack[-1]
+        x1, y1 = self.convert_xy(
+            chess.square_file(last_move.from_square),
+            chess.square_rank(last_move.from_square),
+        )
+        x2, y2 = self.convert_xy(
+            chess.square_file(last_move.to_square),
+            chess.square_rank(last_move.to_square),
+        )
+        draw_rect_alpha(
+            self.win,
+            "#F7F769aa",
+            (x1 * self.SQ_SIZE, y1 * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
+        )
+        draw_rect_alpha(
+            self.win,
+            "#F7F769aa",
+            (x2 * self.SQ_SIZE, y2 * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
+        )
+
+    def draw_check(self):
+        king_square = list(super().pieces(chess.KING, self.turn))[0]
+        x, y = chess.square_file(king_square), chess.square_rank(king_square)
+        x, y = self.convert_xy(x, y)
+        draw_rect_alpha(
+            self.win,
+            "#FF79C6cc",
+            (x * self.SQ_SIZE, y * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
+        )
+
+    def convert_xy(self, x, y):
+        return 7 - x, 7 - y
+
     def select_square(self, pos):
         if self.selected_sq:
             return self.human_move(pos)
         self.selected_sq = [axis // self.SQ_SIZE for axis in pos]
-        self.selected_sq[0] = 7 - self.selected_sq[0]
-        self.selected_sq[1] = 7 - self.selected_sq[1]
+        self.selected_sq = self.convert_xy(*self.selected_sq)
 
     def convert_to_pieces(self, piece):
         if type(piece) == str:
@@ -95,13 +136,18 @@ class Board(chess.Board):
                 legal_moves.append(legal_move)
         return legal_moves
 
+    def undo(self):
+        if not self.move_stack:
+            return
+        self.pop()
+        self.pop()
+
     def human_move(self, end_pos):
         if not self.selected_sq:
             return
 
         end_pos = [axis // self.SQ_SIZE for axis in end_pos]
-        end_pos[0] = 7 - end_pos[0]
-        end_pos[1] = 7 - end_pos[1]
+        end_pos = self.convert_xy(*end_pos)
 
         from_square = chess.square(*self.selected_sq)
         to_square = chess.square(*end_pos)
@@ -136,4 +182,20 @@ class Board(chess.Board):
                 engine.quit()
 
     def __str__(self):
-        return super().__str__()[::-1]
+        builder = []
+
+        for square in chess.SQUARES_180:
+            piece = self.piece_at(square)
+
+            if piece:
+                builder.append(piece.symbol())
+            else:
+                builder.append(".")
+
+            if chess.BB_SQUARES[square] & chess.BB_FILE_H:
+                if square != chess.H1:
+                    builder.append("\n")
+            else:
+                builder.append(" ")
+
+        return "".join(builder)[::-1]

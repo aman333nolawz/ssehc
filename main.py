@@ -8,7 +8,7 @@ pygame.font.init()
 W, H = 600, 600
 SQ_SIZE = W // 8
 
-win = pygame.display.set_mode((W + 100, H))
+win = pygame.display.set_mode((W, H))
 screen = pygame.Surface((W, H))
 
 pygame.display.set_caption("Chess")
@@ -28,7 +28,16 @@ while True:
             if board.turn == 1:
                 board.select_square(pygame.mouse.get_pos())
 
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_z:
+                board.undo()
+
     board.draw_board()
+    board.draw_last_move()
+
+    if board.is_check():
+        board.draw_check()
+
     board.draw_pieces()
 
     if board.turn == 0:
