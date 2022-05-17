@@ -27,7 +27,17 @@ class Board(chess.Board):
     check_sound = mixer.Sound("sounds/Check.ogg")
     start_sound = mixer.Sound("sounds/Start.ogg")
 
-    def __init__(self, win=None, W=None, H=None, SQ_SIZE=None, *args, **kwargs):
+    def __init__(
+        self,
+        win=None,
+        W=None,
+        H=None,
+        SQ_SIZE=None,
+        engine=None,
+        flipped=False,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         if win == None:
             return
@@ -39,11 +49,17 @@ class Board(chess.Board):
         self.pieces = ["p", "k", "n", "r", "b", "q"]
         self.pieces += [i.upper() for i in self.pieces]
         self.piece_images = [
-            pygame.transform.scale(
-                pygame.image.load(f"images/{piece}.png"), (self.SQ_SIZE, self.SQ_SIZE)
+            pygame.transform.flip(
+                pygame.transform.scale(
+                    pygame.image.load(f"images/{piece}.png"),
+                    (self.SQ_SIZE, self.SQ_SIZE),
+                ),
+                False,
+                flipped,
             )
             for piece in self.pieces
         ]
+        self.engine = engine
         self.selected_sq = None
         self.pov_score = None
         self.computer_played = False
@@ -60,22 +76,20 @@ class Board(chess.Board):
 
     def draw_pieces(self):
         self.board = str(self).replace(" ", "").split("\n")[::-1]
-        # print(self.board)
-        # exit()
-        for y, row in enumerate(self.board):
-            row = row[::-1]
-            for x, cell in enumerate(row):
-                if cell == ".":
+        for y in range(8):
+            for x in range(8):
+                square = chess.square(x, y)
+                piece = self.piece_at(square)
+                if piece is None:
                     continue
                 self.win.blit(
-                    self.piece_images[self.pieces.index(cell)],
+                    self.piece_images[self.pieces.index(piece.symbol())],
                     (x * self.SQ_SIZE, y * self.SQ_SIZE),
                 )
 
     def draw_legal_moves(self, moves):
         for move in moves:
             x, y = chess.square_file(move.to_square), chess.square_rank(move.to_square)
-            x, y = self.convert_xy(x, y)
             draw_circle_alpha(
                 self.win,
                 (0, 0, 0, 127),
@@ -90,11 +104,11 @@ class Board(chess.Board):
         if not self.move_stack:
             return
         last_move = self.move_stack[-1]
-        x1, y1 = self.convert_xy(
+        x1, y1 = (
             chess.square_file(last_move.from_square),
             chess.square_rank(last_move.from_square),
         )
-        x2, y2 = self.convert_xy(
+        x2, y2 = (
             chess.square_file(last_move.to_square),
             chess.square_rank(last_move.to_square),
         )
@@ -113,21 +127,17 @@ class Board(chess.Board):
         # king_square = list(super().pieces(chess.KING, self.turn))[0]
         king_square = self.king(self.turn)
         x, y = chess.square_file(king_square), chess.square_rank(king_square)
-        x, y = self.convert_xy(x, y)
         draw_rect_alpha(
             self.win,
             "#FF79C6cc",
             (x * self.SQ_SIZE, y * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
         )
 
-    def convert_xy(self, x, y):
-        return x, 7 - y
-
     def select_square(self, pos):
         if self.selected_sq:
             return self.human_move(pos)
-        self.selected_sq = [axis // self.SQ_SIZE for axis in pos]
-        self.selected_sq = self.convert_xy(*self.selected_sq)
+        # self.selected_sq = [axis // self.SQ_SIZE for axis in pos]
+        self.selected_sq = pos
 
     def convert_to_pieces(self, piece):
         if type(piece) == str:
@@ -159,8 +169,13 @@ class Board(chess.Board):
         if not self.move_stack:
             return
         self.pop()
+        self.pov_score = self.engine.analyse(self, chess.engine.Limit(depth=15)).get(
+            "score"
+        )
 
-    def push(self, move):
+    def push(self, move, play_sound=False):
+        if not play_sound:
+            return super().push(move)
         sound = self.move_sound
         if self.is_capture(move):
             sound = self.capture_sound
@@ -175,8 +190,7 @@ class Board(chess.Board):
         if not self.selected_sq:
             return
 
-        end_pos = [axis // self.SQ_SIZE for axis in end_pos]
-        end_pos = self.convert_xy(*end_pos)
+        # end_pos = [axis // self.SQ_SIZE for axis in end_pos]
 
         from_square = chess.square(*self.selected_sq)
         to_square = chess.square(*end_pos)
@@ -194,19 +208,20 @@ class Board(chess.Board):
                         "Promotion",
                         ["queen", "rook", "knight", "bishop"],
                     )
-                    move.promotion = self.convert_to_pieces(promotion_piece).piece_type
+                    move.promotion = promotion_piece
         if self.is_legal(move):
-            self.push(move)
+            self.push(move, True)
             # self.move_sound.play()
         self.selected_sq = None
 
-    def computer_move(self, engine):
+    def computer_move(self):
         self.computer_played = True
-        result = engine.play(self, chess.engine.Limit(time=5))
-        self.push(result.move)
-        # self.move_sound.play()
+        result = self.engine.play(self, chess.engine.Limit(time=0.5))
+        self.push(result.move, True)
+        self.pov_score = self.engine.analyse(self, chess.engine.Limit(depth=15)).get(
+            "score"
+        )
         self.computer_played = False
-        # self.pov_score = engine.analyse(self, chess.engine.Limit(time=5)).get("score")
 
     def __str__(self):
         builder = []
