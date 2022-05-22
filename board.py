@@ -3,7 +3,7 @@ import chess.engine
 import pygame
 from pygame import mixer
 from easygui import buttonbox
-
+import math
 
 pygame.init()
 
@@ -19,6 +19,42 @@ def draw_rect_alpha(surface, color, rect):
     shape_surf = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
     pygame.draw.rect(shape_surf, color, shape_surf.get_rect())
     surface.blit(shape_surf, rect)
+
+
+def draw_polygon_alpha(surface, color, points):
+    lx, ly = zip(*points)
+    min_x, min_y, max_x, max_y = min(lx), min(ly), max(lx), max(ly)
+    target_rect = pygame.Rect(min_x, min_y, max_x - min_x, max_y - min_y)
+    shape_surf = pygame.Surface(target_rect.size, pygame.SRCALPHA)
+    pygame.draw.polygon(shape_surf, color,
+                        [(x - min_x, y - min_y) for x, y in points])
+    surface.blit(shape_surf, target_rect)
+
+
+def draw_arrow(screen, lcolor, tricolor, start, end, trirad, thickness=2):
+    rad = math.pi / 180
+    pygame.draw.line(screen, lcolor, start, end, thickness)
+    x1, y1 = start
+    x2, y2 = end
+    rotation = (math.atan2(start[1] - end[1], end[0] - start[0])) + math.pi / 2
+    pygame.draw.polygon(
+        screen,
+        tricolor,
+        (
+            (
+                end[0] + trirad * math.sin(rotation),
+                end[1] + trirad * math.cos(rotation),
+            ),
+            (
+                end[0] + trirad * math.sin(rotation - 120 * rad),
+                end[1] + trirad * math.cos(rotation - 120 * rad),
+            ),
+            (
+                end[0] + trirad * math.sin(rotation + 120 * rad),
+                end[1] + trirad * math.cos(rotation + 120 * rad),
+            ),
+        ),
+    )
 
 
 class Board(chess.Board):
@@ -48,34 +84,39 @@ class Board(chess.Board):
         self.colors = ["#EEEED2", "#769656"]
         self.pieces = ["p", "k", "n", "r", "b", "q"]
         self.pieces += [i.upper() for i in self.pieces]
+        self.engine = engine
+        self.selected_sq = None
+        self.pov_score = None
+        self.computer_played = False
+        self.start_sound.play()
+        self.flipped = flipped
+        self.ponder_move = None
+        self.load_images()
+
+    def load_images(self):
         self.piece_images = [
             pygame.transform.flip(
                 pygame.transform.scale(
                     pygame.image.load(f"images/{piece}.png"),
                     (self.SQ_SIZE, self.SQ_SIZE),
                 ),
-                False,
-                flipped,
-            )
-            for piece in self.pieces
+                not self.flipped,
+                self.flipped,
+            ) for piece in self.pieces
         ]
-        self.engine = engine
-        self.selected_sq = None
-        self.pov_score = None
-        self.computer_played = False
-        self.start_sound.play()
 
     def draw_board(self):
+        colors = self.colors[::-1] if self.flipped else self.colors[::-1]
         for y in range(8):
             for x in range(8):
                 pygame.draw.rect(
                     self.win,
-                    self.colors[(y + x) % 2],
-                    (y * self.SQ_SIZE, x * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
+                    colors[(y + x) % 2],
+                    (y * self.SQ_SIZE, x * self.SQ_SIZE, self.SQ_SIZE,
+                     self.SQ_SIZE),
                 )
 
     def draw_pieces(self):
-        self.board = str(self).replace(" ", "").split("\n")[::-1]
         for y in range(8):
             for x in range(8):
                 square = chess.square(x, y)
@@ -86,18 +127,43 @@ class Board(chess.Board):
                     self.piece_images[self.pieces.index(piece.symbol())],
                     (x * self.SQ_SIZE, y * self.SQ_SIZE),
                 )
+        if not self.ponder_move:
+            return
+        # print(self.ponder_move, "hi")
+        x1, y1 = chess.square_file(
+            self.ponder_move.from_square), chess.square_rank(
+                self.ponder_move.from_square)
+        x2, y2 = chess.square_file(
+            self.ponder_move.to_square), chess.square_rank(
+                self.ponder_move.to_square)
+        draw_arrow(
+            self.win,
+            "#F9C24C",
+            "#F9C24C",
+            (
+                x1 * self.SQ_SIZE + self.SQ_SIZE // 2,
+                y1 * self.SQ_SIZE + self.SQ_SIZE // 2,
+            ),
+            (
+                x2 * self.SQ_SIZE + self.SQ_SIZE // 2,
+                y2 * self.SQ_SIZE + self.SQ_SIZE // 2,
+            ),
+            self.SQ_SIZE // 4,
+            self.SQ_SIZE // 4,
+        )
 
     def draw_legal_moves(self, moves):
         for move in moves:
-            x, y = chess.square_file(move.to_square), chess.square_rank(move.to_square)
+            x, y = chess.square_file(move.to_square), chess.square_rank(
+                move.to_square)
             draw_circle_alpha(
                 self.win,
-                (0, 0, 0, 127),
+                (0, 0, 0, 60),
                 (
                     x * self.SQ_SIZE + self.SQ_SIZE // 2,
                     y * self.SQ_SIZE + self.SQ_SIZE // 2,
                 ),
-                self.SQ_SIZE // 4,
+                self.SQ_SIZE // 6,
             )
 
     def draw_last_move(self):
@@ -136,19 +202,16 @@ class Board(chess.Board):
     def select_square(self, pos):
         if self.selected_sq:
             return self.human_move(pos)
-        # self.selected_sq = [axis // self.SQ_SIZE for axis in pos]
         self.selected_sq = pos
 
     def convert_to_pieces(self, piece):
         if type(piece) == str:
             try:
-                return chess.Piece(
-                    chess.PIECE_NAMES.index(piece.lower()), piece.islower()
-                )
+                return chess.Piece(chess.PIECE_NAMES.index(piece.lower()),
+                                   piece.islower())
             except:
-                return chess.Piece(
-                    chess.PIECE_SYMBOLS.index(piece.lower()), piece.islower()
-                )
+                return chess.Piece(chess.PIECE_SYMBOLS.index(piece.lower()),
+                                   piece.islower())
 
         return piece
 
@@ -169,9 +232,8 @@ class Board(chess.Board):
         if not self.move_stack:
             return
         self.pop()
-        self.pov_score = self.engine.analyse(self, chess.engine.Limit(depth=15)).get(
-            "score"
-        )
+        self.pov_score = self.engine.analyse(
+            self, chess.engine.Limit(depth=15)).get("score")
 
     def push(self, move, play_sound=False):
         if not play_sound:
@@ -182,7 +244,6 @@ class Board(chess.Board):
 
         super().push(move)
         if self.is_check():
-            print("check")
             sound = self.check_sound
         sound.play()
 
@@ -200,9 +261,9 @@ class Board(chess.Board):
 
         if moving_piece and moving_piece.piece_type == chess.PAWN:
             if self.is_legal(chess.Move(from_square, to_square, chess.QUEEN)):
-                if (
-                    moving_piece.color == chess.WHITE and to_square in range(56, 64)
-                ) or (moving_piece.color == chess.BLACK and to_square in range(8)):
+                if (moving_piece.color == chess.WHITE and to_square in range(
+                        56, 64)) or (moving_piece.color == chess.BLACK
+                                     and to_square in range(8)):
                     promotion_piece = buttonbox(
                         "What do you want to promote to?",
                         "Promotion",
@@ -218,9 +279,9 @@ class Board(chess.Board):
         self.computer_played = True
         result = self.engine.play(self, chess.engine.Limit(time=0.5))
         self.push(result.move, True)
-        self.pov_score = self.engine.analyse(self, chess.engine.Limit(depth=15)).get(
-            "score"
-        )
+        self.ponder_move = result.ponder
+        self.pov_score = self.engine.analyse(
+            self, chess.engine.Limit(depth=15)).get("score")
         self.computer_played = False
 
     def __str__(self):
