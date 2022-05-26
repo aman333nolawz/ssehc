@@ -5,13 +5,14 @@ import pygame
 import pygame_gui
 from board import Board
 
+
 pygame.init()
 pygame.font.init()
 
 W, H = 600, 600
 SQ_SIZE = W // 8
 
-win = pygame.display.set_mode((W + 150, H))
+win = pygame.display.set_mode((W + 200, H))
 screen = pygame.Surface((W, H))
 manager = pygame_gui.UIManager(win.get_size(), "theme.json")
 
@@ -21,7 +22,7 @@ clock = pygame.time.Clock()
 
 pygame.display.set_caption("Chess")
 
-font = pygame.font.SysFont("Fira Code Medium", 30)
+font = pygame.font.SysFont(None, 30)
 
 reset_button = pygame_gui.elements.UIButton(pygame.Rect(
     W + 30 + screen_x, 60 + screen_y, 75, 30),
@@ -36,13 +37,25 @@ undo_button = pygame_gui.elements.UIButton(pygame.Rect(W + 30 + screen_x,
                                            text='Undo',
                                            manager=manager)
 
+move_win = pygame_gui.elements.ui_window.UIWindow(pygame.Rect(W + 30 + screen_x, H // 2 + screen_y, 180, 100), manager, "Moves", resizable=True)
+move_container = move_win.get_container()
+move_scrollbar = pygame_gui.elements.UIVerticalScrollBar(pygame.Rect(0, 0, 20, 100), 0.5, manager, move_container)
+
+
 flip = True
 opponent, player = 0, 1
+
+
+def reset_board():
+    global flip, board
+    board = Board(screen, W, H, SQ_SIZE, engine, manager, move_container, flipped=True)
+    flip = True
+
 
 engine = chess.engine.SimpleEngine.popen_uci(r"./engines/stockfish_15_x64")
 
 try:
-    board = Board(screen, W, H, SQ_SIZE, engine, flipped=True)
+    reset_board()
     run = True
     while run:
         time_delta = clock.tick(60) / 1000.0
@@ -66,8 +79,7 @@ try:
                 if event.key == pygame.K_z:
                     board.undo()
                 elif event.key == pygame.K_r:
-                    board = Board(screen, W, H, SQ_SIZE, engine, flipped=True)
-                    flip = True
+                    reset_board()
                 elif event.key == pygame.K_f:
                     flip = not flip
                     board.flipped = not board.flipped
@@ -85,12 +97,16 @@ try:
                 if event.ui_element == undo_button:
                     board.undo()
                 if event.ui_element == reset_button:
-                    board = Board(screen, W, H, SQ_SIZE, engine, flipped=True)
-                    flip = True
+                    reset_board()
 
             manager.process_events(event)
 
         manager.update(time_delta)
+
+        if move_scrollbar.check_has_moved_recently():
+            print(move_win.get_abs_rect().height-50)
+            move_container.set_relative_position((0, move_win.get_abs_rect().height-100))
+            move_scrollbar.set_visible_percentage(0.5)
 
         board.draw_board()
         board.draw_last_move()

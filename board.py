@@ -1,6 +1,7 @@
 import chess
 import chess.engine
 import pygame
+import pygame_gui
 from pygame import mixer
 from easygui import buttonbox
 import math
@@ -26,8 +27,7 @@ def draw_polygon_alpha(surface, color, points):
     min_x, min_y, max_x, max_y = min(lx), min(ly), max(lx), max(ly)
     target_rect = pygame.Rect(min_x, min_y, max_x - min_x, max_y - min_y)
     shape_surf = pygame.Surface(target_rect.size, pygame.SRCALPHA)
-    pygame.draw.polygon(shape_surf, color,
-                        [(x - min_x, y - min_y) for x, y in points])
+    pygame.draw.polygon(shape_surf, color, [(x - min_x, y - min_y) for x, y in points])
     surface.blit(shape_surf, target_rect)
 
 
@@ -70,7 +70,10 @@ class Board(chess.Board):
         H=None,
         SQ_SIZE=None,
         engine=None,
+        manager=None,
+        move_container=None,
         flipped=False,
+        analyse=False,
         *args,
         **kwargs,
     ):
@@ -86,11 +89,23 @@ class Board(chess.Board):
         self.pieces += [i.upper() for i in self.pieces]
         self.engine = engine
         self.selected_sq = None
-        self.pov_score = None
+        self.analysis_board = chess.Board()
+        self.analyse_pov = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
+        self.pov_score = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
+        self.move_analysis = None
         self.computer_played = False
         self.start_sound.play()
         self.flipped = flipped
         self.ponder_move = None
+        self.move_last_x = 0
+        self.move_last_y = 0
+        self.move_color = {
+            "best": "#00FF00AA",
+            "ok": "#006600AA",
+            "inaccuracy": "#00AAAAAA",
+            "blunder": "#FF0000AA",
+        }
+        self.analyse = analyse
         self.load_images()
 
     def load_images(self):
@@ -102,7 +117,8 @@ class Board(chess.Board):
                 ),
                 not self.flipped,
                 self.flipped,
-            ) for piece in self.pieces
+            )
+            for piece in self.pieces
         ]
 
     def draw_board(self):
@@ -112,11 +128,13 @@ class Board(chess.Board):
                 pygame.draw.rect(
                     self.win,
                     colors[(y + x) % 2],
-                    (y * self.SQ_SIZE, x * self.SQ_SIZE, self.SQ_SIZE,
-                     self.SQ_SIZE),
+                    (y * self.SQ_SIZE, x * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
                 )
 
     def draw_pieces(self):
+        if self.move_analysis:
+            pass
+            # print(self.move_analysis)
         for y in range(8):
             for x in range(8):
                 square = chess.square(x, y)
@@ -129,13 +147,12 @@ class Board(chess.Board):
                 )
         if not self.ponder_move:
             return
-        # print(self.ponder_move, "hi")
-        x1, y1 = chess.square_file(
-            self.ponder_move.from_square), chess.square_rank(
-                self.ponder_move.from_square)
-        x2, y2 = chess.square_file(
-            self.ponder_move.to_square), chess.square_rank(
-                self.ponder_move.to_square)
+        x1, y1 = chess.square_file(self.ponder_move.from_square), chess.square_rank(
+            self.ponder_move.from_square
+        )
+        x2, y2 = chess.square_file(self.ponder_move.to_square), chess.square_rank(
+            self.ponder_move.to_square
+        )
         draw_arrow(
             self.win,
             "#F9C24C",
@@ -154,8 +171,7 @@ class Board(chess.Board):
 
     def draw_legal_moves(self, moves):
         for move in moves:
-            x, y = chess.square_file(move.to_square), chess.square_rank(
-                move.to_square)
+            x, y = chess.square_file(move.to_square), chess.square_rank(move.to_square)
             draw_circle_alpha(
                 self.win,
                 (0, 0, 0, 60),
@@ -183,11 +199,18 @@ class Board(chess.Board):
             "#F7F769aa",
             (x1 * self.SQ_SIZE, y1 * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
         )
-        draw_rect_alpha(
-            self.win,
-            "#F7F769aa",
-            (x2 * self.SQ_SIZE, y2 * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
-        )
+        if self.move_analysis:
+            draw_rect_alpha(
+                self.win,
+                self.move_color[self.move_analysis],
+                (x2 * self.SQ_SIZE, y2 * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
+            )
+        else:
+            draw_rect_alpha(
+                self.win,
+                "#F7F769aa",
+                (x2 * self.SQ_SIZE, y2 * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE),
+            )
 
     def draw_check(self):
         # king_square = list(super().pieces(chess.KING, self.turn))[0]
@@ -207,11 +230,13 @@ class Board(chess.Board):
     def convert_to_pieces(self, piece):
         if type(piece) == str:
             try:
-                return chess.Piece(chess.PIECE_NAMES.index(piece.lower()),
-                                   piece.islower())
+                return chess.Piece(
+                    chess.PIECE_NAMES.index(piece.lower()), piece.islower()
+                )
             except:
-                return chess.Piece(chess.PIECE_SYMBOLS.index(piece.lower()),
-                                   piece.islower())
+                return chess.Piece(
+                    chess.PIECE_SYMBOLS.index(piece.lower()), piece.islower()
+                )
 
         return piece
 
@@ -232,10 +257,11 @@ class Board(chess.Board):
         if not self.move_stack:
             return
         self.pop()
-        self.pov_score = self.engine.analyse(
-            self, chess.engine.Limit(depth=15)).get("score")
+        self.pov_score = self.engine.analyse(self, chess.engine.Limit(depth=15)).get(
+            "score"
+        )
 
-    def push(self, move, play_sound=False):
+    def push(self, move, play_sound=False, ponder_move=False):
         if not play_sound:
             return super().push(move)
         sound = self.move_sound
@@ -243,15 +269,44 @@ class Board(chess.Board):
             sound = self.capture_sound
 
         super().push(move)
-        if self.is_check():
-            sound = self.check_sound
         sound.play()
 
-    def human_move(self, end_pos):
+        self.move_last_x += 1
+        if self.move_last_x > 1:
+            self.move_last_x = 0
+            self.move_last_y += 1
+
+        if not self.analyse:
+            return
+        analysation = self.engine.analyse(
+            self, chess.engine.Limit(depth=15), info=chess.engine.INFO_ALL
+        )
+        self.pov_score = analysation.get("score")
+        if ponder_move and analysation:
+            self.ponder_move = analysation.get("pv")[0]
+
+        self.analysis_board = chess.Board()
+        analysation_broke = False
+        for move in self.move_stack:
+            if not self.analysis_board.is_legal(move):
+                analysation_broke = True
+                break
+            self.analysis_board.push(move)
+
+        for move in analysation.get("pv"):
+            if not self.analysis_board.is_legal(move) or analysation_broke:
+                break
+            self.analysis_board.push(move)
+
+        self.analyse_pov = self.engine.analyse(
+            self.analysis_board,
+            chess.engine.Limit(depth=20),
+            info=chess.engine.INFO_SCORE,
+        ).get("score")
+
+    def human_move(self, end_pos, ponder_move=True):
         if not self.selected_sq:
             return
-
-        # end_pos = [axis // self.SQ_SIZE for axis in end_pos]
 
         from_square = chess.square(*self.selected_sq)
         to_square = chess.square(*end_pos)
@@ -261,9 +316,9 @@ class Board(chess.Board):
 
         if moving_piece and moving_piece.piece_type == chess.PAWN:
             if self.is_legal(chess.Move(from_square, to_square, chess.QUEEN)):
-                if (moving_piece.color == chess.WHITE and to_square in range(
-                        56, 64)) or (moving_piece.color == chess.BLACK
-                                     and to_square in range(8)):
+                if (
+                    moving_piece.color == chess.WHITE and to_square in range(56, 64)
+                ) or (moving_piece.color == chess.BLACK and to_square in range(8)):
                     promotion_piece = buttonbox(
                         "What do you want to promote to?",
                         "Promotion",
@@ -271,17 +326,34 @@ class Board(chess.Board):
                     )
                     move.promotion = promotion_piece
         if self.is_legal(move):
-            self.push(move, True)
-            # self.move_sound.play()
-        self.selected_sq = None
+            self.push(move, True, ponder_move)
+            if self.analyse:
+                if self.turn == chess.BLACK:
+                    diff = int(self.analyse_pov.white().score(mate_score=100000)) - int(
+                        self.pov_score.white().score(mate_score=100000)
+                    )
+                else:
+                    diff = int(self.analyse_pov.black().score(mate_score=100000)) - int(
+                        self.pov_score.black().score(mate_score=100000)
+                    )
 
-    def computer_move(self):
+                if diff >= 50:
+                    move_analysis = "best"
+                elif diff >= 0:
+                    move_analysis = "ok"
+                elif diff >= -50:
+                    move_analysis = "inaccuracy"
+                else:
+                    move_analysis = "blunder"
+                self.move_analysis = move_analysis
+                print(diff)
+        self.selected_sq = None
+        self.computer_played = False
+
+    def computer_move(self, ponder_move=True):
         self.computer_played = True
-        result = self.engine.play(self, chess.engine.Limit(time=0.5))
-        self.push(result.move, True)
-        self.ponder_move = result.ponder
-        self.pov_score = self.engine.analyse(
-            self, chess.engine.Limit(depth=15)).get("score")
+        result = self.engine.play(self, chess.engine.Limit(depth=15))
+        self.push(result.move, True, ponder_move)
         self.computer_played = False
 
     def __str__(self):
