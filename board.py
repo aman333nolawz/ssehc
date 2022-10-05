@@ -1,10 +1,10 @@
+import math
+
 import chess
 import chess.engine
 import pygame
-import pygame_gui
-from pygame import mixer
 from easygui import buttonbox
-import math
+from pygame import mixer
 
 pygame.init()
 
@@ -89,9 +89,6 @@ class Board(chess.Board):
         self.pieces += [i.upper() for i in self.pieces]
         self.engine = engine
         self.selected_sq = None
-        self.analysis_board = chess.Board()
-        self.analyse_pov = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
-        self.pov_score = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
         self.move_analysis = None
         self.computer_played = False
         self.start_sound.play()
@@ -100,12 +97,15 @@ class Board(chess.Board):
         self.move_last_x = 0
         self.move_last_y = 0
         self.move_color = {
+            "brilliant": "#00CCCCAA",
             "best": "#00FF00AA",
             "ok": "#006600AA",
-            "inaccuracy": "#00AAAAAA",
+            "inaccuracy": "#FFAA00AA",
             "blunder": "#FF0000AA",
         }
         self.analyse = analyse
+        self.pov_score = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
+        self.old_pov = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
         self.load_images()
 
     def load_images(self):
@@ -132,9 +132,6 @@ class Board(chess.Board):
                 )
 
     def draw_pieces(self):
-        if self.move_analysis:
-            pass
-            # print(self.move_analysis)
         for y in range(8):
             for x in range(8):
                 square = chess.square(x, y)
@@ -254,12 +251,42 @@ class Board(chess.Board):
             return
         self.pop()
 
+        if self.analyse and not self.move_stack:
+            analysis = self.engine.analyse(self, chess.engine.Limit(time=0.2))
+            self.ponder_move = analysis.get("pv", [None])[0]
+            self.pov_score = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
+            self.old_pov = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
+
         if not self.move_stack:
             return
         self.pop()
-        self.pov_score = self.engine.analyse(self, chess.engine.Limit(depth=15)).get(
-            "score"
-        )
+
+        if self.analyse:
+            analysis = self.engine.analyse(self, chess.engine.Limit(time=0.2))
+            self.ponder_move = analysis.get("pv", [None])[0]
+            self.pov_score = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
+            self.old_pov = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
+
+    def _analyse(self):
+        analysis = self.engine.analyse(self, chess.engine.Limit(time=0.2))
+        self.ponder_move = analysis.get("pv", [None])[0]
+        self.pov_score = analysis.get("score")
+
+        if self.turn == chess.BLACK:
+            diff = self.pov_score.white().score(mate_score=100000) - self.old_pov.white().score(mate_score=100000)
+        else:
+            diff = self.pov_score.black().score(mate_score=100000) - self.old_pov.black().score(mate_score=100000)
+        if diff > 100:
+            self.move_analysis = "brilliant"
+        elif diff > -50:
+            self.move_analysis = "best"
+        elif diff > -100:
+            self.move_analysis = "ok"
+        elif diff > -200:
+            self.move_analysis = "inaccuracy"
+        elif diff <= -200:
+            self.move_analysis = "blunder"
+
 
     def push(self, move, play_sound=False, ponder_move=False):
         if not play_sound:
@@ -268,6 +295,7 @@ class Board(chess.Board):
         if self.is_capture(move):
             sound = self.capture_sound
 
+        self.old_pov = self.pov_score
         super().push(move)
         sound.play()
 
@@ -278,31 +306,7 @@ class Board(chess.Board):
 
         if not self.analyse:
             return
-        analysation = self.engine.analyse(
-            self, chess.engine.Limit(depth=15), info=chess.engine.INFO_ALL
-        )
-        self.pov_score = analysation.get("score")
-        if ponder_move and analysation:
-            self.ponder_move = analysation.get("pv")[0]
-
-        self.analysis_board = chess.Board()
-        analysation_broke = False
-        for move in self.move_stack:
-            if not self.analysis_board.is_legal(move):
-                analysation_broke = True
-                break
-            self.analysis_board.push(move)
-
-        for move in analysation.get("pv"):
-            if not self.analysis_board.is_legal(move) or analysation_broke:
-                break
-            self.analysis_board.push(move)
-
-        self.analyse_pov = self.engine.analyse(
-            self.analysis_board,
-            chess.engine.Limit(depth=20),
-            info=chess.engine.INFO_SCORE,
-        ).get("score")
+        self._analyse()
 
     def human_move(self, end_pos, ponder_move=True):
         if not self.selected_sq:
@@ -324,29 +328,16 @@ class Board(chess.Board):
                         "Promotion",
                         ["queen", "rook", "knight", "bishop"],
                     )
-                    move.promotion = promotion_piece
+                    if promotion_piece == "queen":
+                        move.promotion = chess.QUEEN
+                    elif promotion_piece == "rook":
+                        move.promotion = chess.ROOK
+                    elif promotion_piece == "knight":
+                        move.promotion = chess.KNIGHT
+                    elif promotion_piece == "bishop":
+                        move.promotion = chess.BISHOP
         if self.is_legal(move):
             self.push(move, True, ponder_move)
-            if self.analyse:
-                if self.turn == chess.BLACK:
-                    diff = int(self.analyse_pov.white().score(mate_score=100000)) - int(
-                        self.pov_score.white().score(mate_score=100000)
-                    )
-                else:
-                    diff = int(self.analyse_pov.black().score(mate_score=100000)) - int(
-                        self.pov_score.black().score(mate_score=100000)
-                    )
-
-                if diff >= 50:
-                    move_analysis = "best"
-                elif diff >= 0:
-                    move_analysis = "ok"
-                elif diff >= -50:
-                    move_analysis = "inaccuracy"
-                else:
-                    move_analysis = "blunder"
-                self.move_analysis = move_analysis
-                print(diff)
         self.selected_sq = None
         self.computer_played = False
 

@@ -111,8 +111,8 @@ try:
         board.draw_pieces()
 
         if board.pov_score:
-            white_score = font.render(str(board.pov_score.white()), True, "#F8F8F2")
-            black_score = font.render(str(board.pov_score.black()), True, "#F8F8F2")
+            white_score = font.render(str(board.pov_score.white().score(mate_score=100000)), True, "#F8F8F2")
+            black_score = font.render(str(board.pov_score.black().score(mate_score=100000)), True, "#F8F8F2")
             win.blit(black_score, (W + 20 + screen_x, 30 + screen_y))
             win.blit(white_score, (W + 20 + screen_x, (H - 30) + screen_y))
 
@@ -125,4 +125,5 @@ try:
 
     pygame.quit()
 finally:
+    pygame.quit()
     engine.quit()
