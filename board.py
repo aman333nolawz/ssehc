@@ -71,7 +71,6 @@ class Board(chess.Board):
         SQ_SIZE=None,
         engine=None,
         manager=None,
-        move_container=None,
         flipped=False,
         analyse=False,
         *args,
@@ -246,20 +245,11 @@ class Board(chess.Board):
                 legal_moves.append(legal_move)
         return legal_moves
 
-    def undo(self):
-        if not self.move_stack:
-            return
-        self.pop()
-
-        if self.analyse and not self.move_stack:
-            analysis = self.engine.analyse(self, chess.engine.Limit(time=0.2))
-            self.ponder_move = analysis.get("pv", [None])[0]
-            self.pov_score = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
-            self.old_pov = chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE)
-
-        if not self.move_stack:
-            return
-        self.pop()
+    def undo(self, n=2):
+        for _ in range(n):
+            if not self.move_stack:
+                break
+            self.pop()
 
         if self.analyse:
             analysis = self.engine.analyse(self, chess.engine.Limit(time=0.2))
@@ -273,9 +263,13 @@ class Board(chess.Board):
         self.pov_score = analysis.get("score")
 
         if self.turn == chess.BLACK:
-            diff = self.pov_score.white().score(mate_score=100000) - self.old_pov.white().score(mate_score=100000)
+            diff = self.pov_score.white().score(
+                mate_score=100000
+            ) - self.old_pov.white().score(mate_score=100000)
         else:
-            diff = self.pov_score.black().score(mate_score=100000) - self.old_pov.black().score(mate_score=100000)
+            diff = self.pov_score.black().score(
+                mate_score=100000
+            ) - self.old_pov.black().score(mate_score=100000)
         if diff > 100:
             self.move_analysis = "brilliant"
         elif diff > -50:
@@ -286,7 +280,6 @@ class Board(chess.Board):
             self.move_analysis = "inaccuracy"
         elif diff <= -200:
             self.move_analysis = "blunder"
-
 
     def push(self, move, play_sound=False, ponder_move=False):
         if not play_sound:

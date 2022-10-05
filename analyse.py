@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 from threading import Thread
+
 import chess.engine
 import pygame
 import pygame_gui
-from board import Board
 
+from board import Board
 
 pygame.init()
 pygame.font.init()
@@ -34,20 +35,7 @@ undo_button = pygame_gui.elements.UIButton(
     pygame.Rect(W + 30 + screen_x, 140 + screen_y, 75, 30), text="Undo", manager=manager
 )
 
-move_win = pygame_gui.elements.ui_window.UIWindow(
-    pygame.Rect(W + 30 + screen_x, H // 2 + screen_y, 180, 100),
-    manager,
-    "Moves",
-    resizable=True,
-)
-move_container = move_win.get_container()
-move_scrollbar = pygame_gui.elements.UIVerticalScrollBar(
-    pygame.Rect(0, 0, 20, 100), 0.5, manager, move_container
-)
-
-
 flip = True
-
 
 def reset_board():
     global flip, board
@@ -80,7 +68,7 @@ try:
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_z:
-                    board.undo()
+                    board.undo(1)
                 elif event.key == pygame.K_r:
                     reset_board()
                 elif event.key == pygame.K_f:
@@ -111,8 +99,12 @@ try:
         board.draw_pieces()
 
         if board.pov_score:
-            white_score = font.render(str(board.pov_score.white().score(mate_score=100000)), True, "#F8F8F2")
-            black_score = font.render(str(board.pov_score.black().score(mate_score=100000)), True, "#F8F8F2")
+            white_score = font.render(
+                str(board.pov_score.white().score(mate_score=100000)), True, "#F8F8F2"
+            )
+            black_score = font.render(
+                str(board.pov_score.black().score(mate_score=100000)), True, "#F8F8F2"
+            )
             win.blit(black_score, (W + 20 + screen_x, 30 + screen_y))
             win.blit(white_score, (W + 20 + screen_x, (H - 30) + screen_y))
 
