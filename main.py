@@ -34,9 +34,11 @@ flip_button = pygame_gui.elements.UIButton(
 undo_button = pygame_gui.elements.UIButton(
     pygame.Rect(W + 30 + screen_x, 140 + screen_y, 75, 30), text="Undo", manager=manager
 )
-flip = True
-opponent, player = 0, 1
+h_vs_h = pygame_gui.elements.UIDropDownMenu(["Human", "Computer"], "Computer", pygame.Rect(W + 30 + screen_x, 180 + screen_y, 100, 30), manager)
 
+flip = True
+opponent, player = chess.BLACK, chess.WHITE
+play_with_human = False
 
 def reset_board():
     global flip, board
@@ -59,7 +61,7 @@ try:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = pygame.mouse.get_pos()
                 if (
-                    board.turn == player
+                    (board.turn == player or play_with_human)
                     and x >= screen_x
                     and x <= W
                     and y >= screen_y
@@ -97,6 +99,12 @@ try:
                 if event.ui_element == reset_button:
                     reset_board()
 
+            elif event.type == pygame_gui.UI_SELECTION_LIST_NEW_SELECTION:
+                if event.text == "Human":
+                    play_with_human = True
+                else:
+                    play_with_human = False
+
             manager.process_events(event)
 
         manager.update(time_delta)
@@ -109,7 +117,7 @@ try:
 
         board.draw_pieces()
 
-        if board.turn == opponent:
+        if board.turn == opponent and not play_with_human:
             if not board.computer_played:
                 Thread(target=board.computer_move).start()
 
