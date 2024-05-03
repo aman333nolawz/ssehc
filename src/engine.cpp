@@ -1,4 +1,4 @@
-#include "chess.h"
+#include "chess.hpp"
 #include "subprocess.hpp"
 #include <ostream>
 #include <sstream>
@@ -9,8 +9,7 @@ namespace sp = subprocess;
 
 sp::popen process("stockfish", {});
 
-Engine::Engine(Board &board)
-{
+Engine::Engine(Board &board) {
   this->board = board;
   process.in() << "setoption name Skill Level value 0 " << std::endl;
   process.in() << "ucinewgame" << std::endl;
@@ -18,16 +17,13 @@ Engine::Engine(Board &board)
 
 void Engine::newGame() {}
 
-std::vector<int> Engine::bestMove(std::string moves)
-{
+std::vector<int> Engine::bestMove(std::string moves) {
   std::string move;
 
   process.in() << "position startpos moves " << moves << std::endl;
   process.in() << "go depth 10" << std::endl;
-  while (std::getline(process.out(), move))
-  {
-    if (move.rfind("bestmove", 0) == 0)
-    {
+  while (std::getline(process.out(), move)) {
+    if (move.rfind("bestmove", 0) == 0) {
       break;
     }
   }

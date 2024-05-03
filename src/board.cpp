@@ -1,5 +1,5 @@
 #include "bishop.cpp"
-#include "chess.h"
+#include "chess.hpp"
 #include "king.cpp"
 #include "knight.cpp"
 #include "pawn.cpp"

@@ -1,5 +1,4 @@
 #include "chess.cpp"
-#include "chess.h"
 #include "constants.cpp"
 #include <algorithm>
 #include <memory>

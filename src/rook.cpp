@@ -1,6 +1,6 @@
 #pragma once
 
-#include "chess.h"
+#include "chess.hpp"
 #include <vector>
 
 class Rook : public Piece {

@@ -1,6 +1,5 @@
-#include "chess.h"
+#include "chess.hpp"
 #include "raygui.h"
-#include <chrono>
 #include <cmath>
 #include <memory>
 #include <raylib.h>
