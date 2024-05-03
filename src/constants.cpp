@@ -1,6 +1,6 @@
 #pragma once
-extern const int W = 800;
-extern const int H = 800;
+extern const int W = 1000;
+extern const int H = 1000;
 extern const int SQ = W / 8;
 
 extern const int C_BLACK = 0;
